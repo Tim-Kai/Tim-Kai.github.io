@@ -1,6 +1,6 @@
 ---
 title: "Financial Fraud Detection on DGraphFin"
-excerpt: "Short description of portfolio item number 1<br/><img src='/images/500x300.png'>"
+excerpt: "Graph anomaly detection applied in financial domain.<br/><img src='/images/social_graph.webp'>"
 collection: portfolio
 ---
 
@@ -18,7 +18,7 @@ This project walks through a fraud-detection system I built on the DGraphFin dat
 
 DGraph-Fin is a directed, unweighted dynamic graph that represents a social network among users of Finvolution Group. In this graph, a node represents a Finvolution user, and an edge from one user to another means that the user regards the other user as the emergency contact person. An illustrative overview of dataset is provided below.
 
-Each node in the graph is a user of FinVolution, and edges in the graph between two users (u and v) represent user u designating user v as their emergency contact. This is a directional graph between the users with 3,700,550 nodes and 4,300,999 edges. Nodes in the graph are classified as foreground nodes and background nodes. Foreground nodes are the ones that labeled as normal (Class 0) and fraud (Class 1), which are also the nodes of our prediction task. Background nodes, on the other hand, are irrelevant to the task but play an important role in maintaining the connectivity of the graph. There are 1,210,092 users labeled as Normal and 15509 users labeled as Fraud. The dataset also provides 17 anonymous features based on user demographics.
+Each node in the graph is a user of FinVolution, and edges in the graph between two users (u and v) represent user u designating user v as their emergency contact. This is a directional graph between the users with 3,700,550 nodes and 4,300,999 edges. Nodes in the graph are classified as foreground nodes and background nodes. Foreground nodes are the ones that labeled as normal (Class 0) and fraud (Class 1), which are also the nodes of our prediction task. Background nodes, on the other hand, are irrelevant to the task but play an important role in maintaining the connectivity of the graph. There are 1,210,092 users labeled as Normal and 15509 users labeled as Fraud. The dataset also provides 17 anonymous features based on user demographics. We use the default train/validation/test split provided with the dataset, with a 70/10/20 train-validation-test split ratio.
 
 I frame the problem as graph node binary classification:
 
@@ -46,5 +46,111 @@ The main challenges I had to solve:
 2. **Class imbalance.** Fraud is rare; naive training degrades badly. I used focused negative sampling.
 3. **Split semantics.** DGraphFin ships `train/valid/test_mask` as **index arrays**, not boolean masks over all nodes — a subtle difference that bites you the moment you index predictions. (More on this in the lessons section.)
 4. **Label leakage.** Neighbor-label statistics (e.g. "what fraction of my neighbors are fraud") are extremely predictive but leak information for transductive training. I kept them out of the tabular feature branch.
-5. **Timestamps.** Edges have time, and when someone transacts (sudden bursts, first/last activity) carries signal beyond raw edge counts. How to fully utilize this information and make the model incorporate this feature is tricky.
+5. **Timestamps.** Edges have time, and when someone transacts (sudden bursts, first/last activity) carries signal beyond raw edge counts. How to fully utilize temporal information and make the model incorporate this feature is tricky.
 
+# Feature Engineering
+
+Feature engineering matters twice here: it feeds the XGBoost branch directly, and it also augments the GNN's node features. All of it is implemented with **`torch_scatter` reduction ops** (no Python loops over the graph), which keeps it fast on 3.7M nodes.
+
+**Structure features**
+
+- In-degree and out-degree — the simplest and still among the strongest signals.
+
+**Data-quality features**
+
+- The first 17 raw features use `-1` as a missing-value sentinel. I added a count of missing values per node and **filled `-1` with 0** so downstream operations are numerically stable.
+
+**Edge-attribute aggregations**
+
+- Per-node mean of edge types, split by source vs. destination.
+- One-hot counts of each of the 11 edge types, summed over incoming/outgoing edges — a rich profile of *how* a node interacts.
+
+**Timestamp features**
+
+- `max` / `min` / `mean` / `diff` of edge timestamps, from source, destination, and both perspectives.
+- The **edge type of the node's earliest and latest edge** — encoding *what kind* of activity started and ended a node's history.
+
+**1-hop neighbor statistics**
+
+- For each of the first 17 features: max, min, and mean over direct neighbors. This injects a shallow "neighborhood summary" into every node's feature vector without needing the GNN to rediscover it.
+
+**Similarity**
+
+- Cosine similarity between a node and its neighbors, summed — a cheap proxy for local homogeneity.
+
+### The tabular branch gets its own feature set
+
+XGBoost should only see features that are **safe and per-sample independent**. Two things are deliberately excluded from the tabular set (`get_xgb_features` returns 68 dims):
+
+- Neighbor **label** ratios (count of fraud neighbors) — clear leakage in transductive setting.
+- One-hop *feature* summary statistics (the 51-d neighbor feature block) — these carry graph-message-passing information that is the GNN's job, and including them blurs the complementarity between branches.
+
+The result is a clean 68-dimensional table: 17 raw + 2 degree + 1 missing count + 3 edge-attr means + 33 edge-type one-hot counts + 12 timestamp stats.
+
+---
+
+# GNN Model Design
+
+The GNN is a **3-layer GraphSAGE** message-passing network with three design choices worth highlighting:
+
+```mermaid
+graph LR
+    A["edge_attr (type)"] --> EMB["Embedding(12 → 50)"]
+    B["edge_direct (0/1)"] --> EMB2["Embedding(2 → 50)"]
+    EMB --> SUM["combined edge rep<br/>(50-dim)"]
+    EMB2 --> SUM
+    T["edge_timestamp"] --> TE["TimeEncoder: log(t+1) → cos(W·log t)<br/>(50-dim)"]
+    SUM --> MSG["SAGEConv<br/>neighbor messages"]
+    TE --> MSG
+    X["node features"] --> MSG
+    MSG --> BN["BatchNorm + ELU + Dropout"]
+    BN --> OUT["log_softmax → P(fraud)"]
+```
+
+- **Edge-type and edge-direction embeddings.** Different transaction types (transfer, loan, repayment, …) and the *direction* of a transfer mean different things. The model learns a 50-dim embedding for each of the 12 edge-attr values and each of the 2 directions, then adds them into every message.
+- **TimeEncoder.** Timestamps are transformed via `log(t+1)` then `cos(W · log t)`, mapping scalar times to a smooth 50-dim representation. This captures proximity in time — two edges at similar times produce similar encodings — without assuming a linear relationship.
+- **Standard regularization.** BatchNorm, ELU, Dropout, and `log_softmax` on top, trained with NLL loss.
+
+
+---
+
+## 6. Training & Engineering
+
+Training a GNN on 3.7M nodes requires care:
+
+- **3-hop subgraph sampling.** For each training batch, I extract the `k=3`-hop subgraph around the batch nodes with `torch_geometric.utils.k_hop_subgraph`. This bounds memory while preserving each node's local receptive field (3 hops ≈ 3 message-passing layers).
+- **Focused negative sampling.** Each step samples `3 × |positives|` negative nodes, keeping the mini-batch balanced instead of flooding the model with easy negatives.
+- **Optimization.** AdamW with `weight_decay=1e-5`, gradient clipping at norm 2.0, and `expandable_segments` in `PYTORCH_CUDA_ALLOC_CONF` to tame memory fragmentation.
+- **Early stopping** on validation AUC (patience 20 evals), checkpointing the best model.
+- **Batched full-graph inference.** Full-graph prediction is computed in chunks of 8192 nodes, storing probabilities on the **CPU** — the GPU only ever holds one 3-hop subgraph at a time. This is the trick that makes evaluation tractable.
+
+---
+
+## Tabular solution: XGBoost
+
+The GNN alone leaves accuracy on the table; a strong tree model over good features closes much of it.
+
+- **Features.** The 68-dim leakage-free tabular set from Section 4.
+- **AutoML auto feature engineering.** I use [OpenFE](https://github.com/IIIS-Learning-Group/OpenFE) *offline* to search for useful feature combinations, then serialized the selected feature objects with `pickle` for reuse at inference. Storing the `FNode` objects (not just formula strings) is what makes the offline-search → online-transform handoff work — a detail that cost me debugging time.
+- **Top-200 selection.** When the feature count exceeds 200, I drop features by **XGBoost feature importance**, computed **only on the training split** to avoid leakage.
+- **5-fold cross-validation.** Five XGBoost models, predictions averaged — a cheap variance reduction that reliably nudges AUC up.
+
+
+We use a naive ensemble method to blend the prediction of GNN and tree model. We use a fixed weighted average of class-1 probabilities:
+
+```text
+P_final = 0.3 × P_GNN + 0.7 × P_XGBoost
+```
+
+| Model                            | Test AUC        |
+| -------------------------------- | --------------- |
+| official GCN baseline | 0.70 |
+| GraphSAGE (single model)             | 0.85 |
+| XGBoost                      | 0.82 |
+| Ensemble (0.3 GNN + 0.7 XGB) | 0.86        |
+
+The 0.7 weight on XGBoost reflects that, on this dataset, a tree ensemble with well-engineered tabular features are stronger than GNN. But the GNN contributes non-redundant structural signal that the blend captures. 
+
+# Conclusions and key takeaways
+
+- The biggest lesson is that a heterogeneous graph and a well-engineered tabular model are *complementary*. The GNN squeezes out structural signal (community, local topology) that trees can't see; XGBoost exploits per-node statistics and timing that the GNN under-weights. A trivial 0.3/0.7 average of the two beat either alone.
