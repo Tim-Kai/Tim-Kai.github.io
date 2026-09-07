@@ -4,11 +4,11 @@ excerpt: "Graph anomaly detection applied in financial domain.<br/><img src='/im
 collection: portfolio
 ---
 
+<br/><img src='/images/social_graph.webp' >
+
 # Introduction and Motivation
 
 Graphs present a natural way of modelling a large variety of phenomenon. These include social networks, financial networks, e-commerce activities and so on. GNNs can seamlessly model interactions between various users, and their activities like transactions, reviews, and posts.
-
-<br/><img src='/images/social_graph.webp' >
 
 In most networks, malicious users pose a great threat to the stability and experience of other normal users. Malicious users can enter a network, produce fraudulent information, participate in fraudulent transactions and facilitate other harmful activities.  Our aim is to discover these malignant users in the graph through their node features and local graph structure. We reduce the problem of Fraudulent Activity Recognition into a node-level classification task. 
 
@@ -17,6 +17,7 @@ In most networks, malicious users pose a great threat to the stability and exper
 Financial fraud rarely happens in isolation. Fraudsters operate in rings, move money through intermediary accounts, and leave traces not in any single row, but in the *structure* of transactions. This is exactly the regime where graph modeling wins: a suspect's risk depends on the risk of the accounts it transacts with.
 
 <br/><img src='/images/class_imbalance.webp' >
+
 This project walks through a fraud-detection system I built on the DGraphFin dataset released by Xinye and hosted on OpenI. The task is node-level fraud classification on a large, heterogeneous financial transaction graph. The core idea is simple: a graph captures who transacts with whom, which a pure tabular model never sees — but a well-engineered tabular model still carries information the graph can under-use. So I built two branches, a time-aware GraphSAGE GNN and an XGBoost model over hand-crafted features and blended their probabilities.
 
 # Datasets and Problem Definition
@@ -48,10 +49,9 @@ DGraphFin is large and messy in exactly the ways that make production anti-fraud
 The main challenges I had to solve:
 
 1. **Scale.** ~3.7M nodes mean full-batch GNN training does not fit in GPU memory. Scaling GNN to massive dataset is an indispensable factor to be taken into account.
-2. **Class imbalance.** Fraud is rare; naive training degrades badly. I used focused negative sampling.
-3. **Split semantics.** DGraphFin ships `train/valid/test_mask` as **index arrays**, not boolean masks over all nodes — a subtle difference that bites you the moment you index predictions. (More on this in the lessons section.)
-4. **Label leakage.** Neighbor-label statistics (e.g. "what fraction of my neighbors are fraud") are extremely predictive but leak information for transductive training. I kept them out of the tabular feature branch.
-5. **Timestamps.** Edges have time, and when someone transacts (sudden bursts, first/last activity) carries signal beyond raw edge counts. How to fully utilize temporal information and make the model incorporate this feature is tricky.
+2. **Class imbalance.** It's not uncommon in finance data. Fraud is rare; naive training degrades badly. I used focused negative sampling.
+3. **Label leakage.** DGraphFin ships `train/valid/test_mask` as over all nodes. Neighbor-label statistics (e.g. "what fraction of my neighbors are fraud") are extremely predictive but leak information for transductive training.
+4. **Timestamps.** Edges have time, and when someone transacts (sudden bursts, first/last activity) carries signal beyond raw edge counts. How to fully utilize temporal information and make the model incorporate this feature is tricky.
 
 # Feature Engineering
 
@@ -81,7 +81,7 @@ Feature engineering matters twice here: it feeds the XGBoost branch directly, an
 
 **Similarity**
 
-- Cosine similarity between a node and its neighbors, summed — a cheap proxy for local homogeneity.
+- Cosine similarity between a node and its neighbors, summed — an effective proxy for local homogeneity.
 
 ### The tabular branch gets its own feature set
 
@@ -92,7 +92,6 @@ XGBoost should only see features that are **safe and per-sample independent**. T
 
 The result is a clean 68-dimensional table: 17 raw + 2 degree + 1 missing count + 3 edge-attr means + 33 edge-type one-hot counts + 12 timestamp stats.
 
----
 
 # GNN Model Design
 
@@ -117,27 +116,24 @@ graph LR
 - **Standard regularization.** BatchNorm, ELU, Dropout, and `log_softmax` on top, trained with NLL loss.
 
 
----
-
 ## 6. Training & Engineering
 
 Training a GNN on 3.7M nodes requires care:
 
-- **3-hop subgraph sampling.** For each training batch, I extract the `k=3`-hop subgraph around the batch nodes with `torch_geometric.utils.k_hop_subgraph`. This bounds memory while preserving each node's local receptive field (3 hops ≈ 3 message-passing layers).
+- **3-hop subgraph sampling.** For each training batch, I extract the `k=3`-hop subgraph around the batch nodes with `k_hop_subgraph`. This bounds memory while preserving each node's local receptive field (3 hops ≈ 3 message-passing layers).
 - **Focused negative sampling.** Each step samples `3 × |positives|` negative nodes, keeping the mini-batch balanced instead of flooding the model with easy negatives.
-- **Optimization.** AdamW with `weight_decay=1e-5`, gradient clipping at norm 2.0, and `expandable_segments` in `PYTORCH_CUDA_ALLOC_CONF` to tame memory fragmentation.
-- **Early stopping** on validation AUC (patience 20 evals), checkpointing the best model.
+- **Optimization.** AdamW with weight_decay, gradient clipping, and `expandable_segments` in `PYTORCH_CUDA_ALLOC_CONF` to tame memory fragmentation.
 - **Batched full-graph inference.** Full-graph prediction is computed in chunks of 8192 nodes, storing probabilities on the **CPU** — the GPU only ever holds one 3-hop subgraph at a time. This is the trick that makes evaluation tractable.
 
----
+
 
 ## Tabular solution: XGBoost
 
 The GNN alone leaves accuracy on the table; a strong tree model over good features closes much of it.
 
 - **Features.** The 68-dim leakage-free tabular set from Section 4.
-- **AutoML auto feature engineering.** I use [OpenFE](https://github.com/IIIS-Learning-Group/OpenFE) *offline* to search for useful feature combinations, then serialized the selected feature objects with `pickle` for reuse at inference. Storing the `FNode` objects (not just formula strings) is what makes the offline-search → online-transform handoff work — a detail that cost me debugging time.
-- **Top-200 selection.** When the feature count exceeds 200, I drop features by **XGBoost feature importance**, computed **only on the training split** to avoid leakage.
+- **AutoML auto feature engineering.** I use [OpenFE](https://github.com/IIIS-Learning-Group/OpenFE) offline for quick feature combinations construction, then reuse the selected feature objects at inference. 
+- **Top-100 selection.** When the feature count exceeds 200, I drop features by **XGBoost feature importance**, computed **only on the training split** to avoid leakage.
 - **5-fold cross-validation.** Five XGBoost models, predictions averaged — a cheap variance reduction that reliably nudges AUC up.
 
 
@@ -159,3 +155,4 @@ The 0.7 weight on XGBoost reflects that, on this dataset, a tree ensemble with w
 # Conclusions and key takeaways
 
 - The biggest lesson is that a heterogeneous graph and a well-engineered tabular model are *complementary*. The GNN squeezes out structural signal (community, local topology) that trees can't see; XGBoost exploits per-node statistics and timing that the GNN under-weights. A trivial 0.3/0.7 average of the two beat either alone.
+- As is expected, GNN layers suffer from over-smoothing, where stacking layers don't help improving performance. Here we use a sequential of 3 GNN layers.
