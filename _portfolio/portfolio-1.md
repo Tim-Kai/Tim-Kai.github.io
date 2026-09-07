@@ -1,6 +1,6 @@
 ---
 title: "Financial Fraud Detection on DGraphFin"
-excerpt: "Graph anomaly detection applied in financial domain.<br/><img src='/images/social_graph.webp'>"
+excerpt: "Graph anomaly detection applied in financial domain.<br/><img src='/images/dgraph.webp' width='500'>"
 collection: portfolio
 ---
 
@@ -8,10 +8,15 @@ collection: portfolio
 
 Graphs present a natural way of modelling a large variety of phenomenon. These include social networks, financial networks, e-commerce activities and so on. GNNs can seamlessly model interactions between various users, and their activities like transactions, reviews, and posts.
 
+<br/><img src='/images/social_graph.webp' >
+
 In most networks, malicious users pose a great threat to the stability and experience of other normal users. Malicious users can enter a network, produce fraudulent information, participate in fraudulent transactions and facilitate other harmful activities.  Our aim is to discover these malignant users in the graph through their node features and local graph structure. We reduce the problem of Fraudulent Activity Recognition into a node-level classification task. 
+
+<br/><img src='/images/fraud_meme.webp'>
 
 Financial fraud rarely happens in isolation. Fraudsters operate in rings, move money through intermediary accounts, and leave traces not in any single row, but in the *structure* of transactions. This is exactly the regime where graph modeling wins: a suspect's risk depends on the risk of the accounts it transacts with.
 
+<br/><img src='/images/class_imbalance.webp' >
 This project walks through a fraud-detection system I built on the DGraphFin dataset released by Xinye and hosted on OpenI. The task is node-level fraud classification on a large, heterogeneous financial transaction graph. The core idea is simple: a graph captures who transacts with whom, which a pure tabular model never sees — but a well-engineered tabular model still carries information the graph can under-use. So I built two branches, a time-aware GraphSAGE GNN and an XGBoost model over hand-crafted features and blended their probabilities.
 
 # Datasets and Problem Definition
