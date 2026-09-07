@@ -1,6 +1,10 @@
 ---
 title: "Financial Fraud Detection on DGraphFin"
-excerpt: "Graph anomaly detection applied in financial domain.<br/><img src='/images/dgraph.webp' width='500'>"
+excerpt: "Graph anomaly detection applied in financial domain.
+            ### Tech Stack
+            - Language: Python
+            - FrameWork: Pytorch, PyG, OpenFE
+            - Tools: Git, OpenI <br/><img src='/images/dgraph.webp' width='500'>"
 collection: portfolio
 ---
 
@@ -93,8 +97,31 @@ XGBoost should only see features that are **safe and per-sample independent**. T
 The result is a clean 68-dimensional table: 17 raw + 2 degree + 1 missing count + 3 edge-attr means + 33 edge-type one-hot counts + 12 timestamp stats.
 
 
-# GNN Model Design
+# Implemented models
 
+## GCN
+
+Graph Convolutional Networks (GCNs) are a generalization of the traditional Convolutional Neural Networks. GCNs model a Message Passing network, in which messages are passed from the neighbor nodes to the central node. In a GCN, the message passed are the node embeddings themselves, and the aggregation function is just the mean.
+
+$$
+h_{v}^{(k+1)}=\sigma\left(W_{k}\cdot \frac{1}{|N(v)|}\sum_{u\in N(v)} h_u^{(k)} + B_k h_v^{(k)}\right)
+$$
+
+## GraphSage
+
+In GraphSAGE networks, we modify the aggregation functions from GCNs to use the central node’s embeddings in a more expressive manner. The central node embeddings are concatenated to the aggregate over the neighbor embeddings as shown below.
+
+$$
+h_{N(v)}^{(l)} \leftarrow AGG\big(\{h_{u}^{(l-1)},\forall u\in N(v)\}\big)
+$$
+
+$$
+h_v^{(l)}=\sigma(W\cdot \text{CONCAT}(h_v^{(l-1)},h_{N(v)}))
+$$
+
+### GNN Model Design
+
+To make the most out of temporal information, we adapt a time encoder in the traditional GraphSage layer.
 The GNN is a **3-layer GraphSAGE** message-passing network with three design choices worth highlighting:
 
 ```mermaid
