@@ -1,10 +1,6 @@
 ---
 title: "Financial Fraud Detection on DGraphFin"
-excerpt: "Graph anomaly detection applied in financial domain.
-            ### Tech Stack
-            - Language: Python
-            - FrameWork: Pytorch, PyG, OpenFE
-            - Tools: Git, OpenI <br/><img src='/images/dgraph.webp' width='500'>"
+excerpt: "Graph anomaly detection applied in financial domain. <br/><img src='/images/dgraph.webp' width='500'>"
 collection: portfolio
 ---
 
