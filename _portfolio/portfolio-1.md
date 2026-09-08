@@ -48,10 +48,10 @@ DGraphFin is large and messy in exactly the ways that make production anti-fraud
 
 The main challenges I had to solve:
 
-1. **Scale.** ~3.7M nodes mean full-batch GNN training does not fit in GPU memory. Scaling GNN to massive dataset is an indispensable factor to be taken into account.
-2. **Class imbalance.** It's not uncommon in finance data. Fraud is rare; naive training degrades badly. I used focused negative sampling.
+1. **Scale.** ~3.7M nodes mean full-batch GNN training does not fit in GPU memory. Training and inference of such big dataset within limited GPU memory is nontrivial. Scaling GNN to massive dataset is an indispensable factor to be taken into account.
+2. **Class imbalance.** It's not uncommon in finance data that fraud is rare; naive training degrades badly. I used focused negative sampling.
 3. **Label leakage.** DGraphFin ships `train/valid/test_mask` as over all nodes. Neighbor-label statistics (e.g. "what fraction of my neighbors are fraud") are extremely predictive but leak information for transductive training.
-4. **Timestamps.** Edges have time, and when someone transacts (sudden bursts, first/last activity) carries signal beyond raw edge counts. How to fully utilize temporal information and make the model incorporate this feature is tricky.
+4. **Timestamps.** Edges have time, and when someone transacts (sudden bursts, first/last activity) carries signal beyond raw edge counts. How to fully utilize temporal information and incorporate this feature in the model is tricky.
 
 # Feature Engineering
 
@@ -59,7 +59,7 @@ Feature engineering matters twice here: it feeds the XGBoost branch directly, an
 
 **Structure features**
 
-- In-degree and out-degree — the simplest and still among the strongest signals.
+- In-degree and out-degree — simple yet among the strongest signals.
 
 **Data-quality features**
 
