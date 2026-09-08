@@ -5,6 +5,7 @@ permalink: /competitions/
 author_profile: true
 ---
 
+<br/><img src='/images/tom.jpg' >
 
 * 2023-08  Challenge Cup National Undergraduate curricular academic science and technology, Liaoning Province, 1st Prize
 * 2023-09  Contemporary Undergraduate Mathematical Contest in Modeling 2023, National 2nd Prize
