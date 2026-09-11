@@ -1,6 +1,6 @@
 ---
 title: "Financial Fraud Detection on DGraphFin"
-excerpt: "Graph anomaly detection applied in financial domain. <br/><img src='/images/dgraph.webp' width='500'>"
+excerpt: "Graph anomaly detection applied to financial domain. <br/><img src='/images/dgraph.webp' width='500'>"
 collection: portfolio
 ---
 
@@ -25,6 +25,8 @@ This project walks through a fraud-detection system I built on the DGraphFin dat
 DGraph-Fin is a directed, unweighted dynamic graph that represents a social network among users of Finvolution Group. In this graph, a node represents a Finvolution user, and an edge from one user to another means that the user regards the other user as the emergency contact person. An illustrative overview of dataset is provided below.
 
 Each node in the graph is a user of FinVolution, and edges in the graph between two users (u and v) represent user u designating user v as their emergency contact. This is a directional graph between the users with 3,700,550 nodes and 4,300,999 edges. Nodes in the graph are classified as foreground nodes and background nodes. Foreground nodes are the ones that labeled as normal (Class 0) and fraud (Class 1), which are also the nodes of our prediction task. Background nodes, on the other hand, are irrelevant to the task but play an important role in maintaining the connectivity of the graph. There are 1,210,092 users labeled as Normal and 15509 users labeled as Fraud. The dataset also provides 17 anonymous features based on user demographics. We use the default train/validation/test split provided with the dataset, with a 70/10/20 train-validation-test split ratio.
+
+<br/><img src='/images/finvolution.jpg' >
 
 I frame the problem as graph node binary classification:
 
@@ -175,7 +177,7 @@ P_final = 0.3 × P_GNN + 0.7 × P_XGBoost
 
 The 0.7 weight on XGBoost reflects that, on this dataset, a tree ensemble with well-engineered tabular features are stronger than GNN. But the GNN contributes non-redundant structural signal that the blend captures. 
 
-# Conclusions and key takeaways
+# Conclusions and Key Takeaways
 
 - The biggest lesson is that a heterogeneous graph and a well-engineered tabular model are *complementary*. The GNN squeezes out structural signal (community, local topology) that trees can't see; XGBoost exploits per-node statistics and timing that the GNN under-weights. A trivial 0.3/0.7 average of the two beat either alone.
 - As is expected, GNN layers suffer from over-smoothing, where stacking layers don't help improving performance. Here we use a sequential of 3 GNN layers.
