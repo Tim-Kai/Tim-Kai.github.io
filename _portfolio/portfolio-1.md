@@ -12,7 +12,7 @@ Graphs present a natural way of modelling a large variety of phenomenon. These i
 
 In most networks, malicious users pose a great threat to the stability and experience of other normal users. Malicious users can enter a network, produce fraudulent information, participate in fraudulent transactions and facilitate other harmful activities.  Our aim is to discover these malignant users in the graph through their node features and local graph structure. We reduce the problem of Fraudulent Activity Recognition into a node-level classification task. 
 
-<br/><img src='/images/fraud_meme.webp'>
+<br/><img src='/images/fraud_meme.jpg'>
 
 Financial fraud rarely happens in isolation. Fraudsters operate in rings, move money through intermediary accounts, and leave traces not in any single row, but in the *structure* of transactions. This is exactly the regime where graph modeling wins: a suspect's risk depends on the risk of the accounts it transacts with.
 
