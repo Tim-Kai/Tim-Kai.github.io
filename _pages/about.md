@@ -22,4 +22,4 @@ Education
 Honors & awards
 ======
 * Laureate of the DUFE 1st class scholarship 2021 (top 2 student)
-* Laureate of the USTC 2nd class scholarship 2025
+* Laureate of the USTC 1st class scholarship 2026
