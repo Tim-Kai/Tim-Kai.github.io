@@ -29,13 +29,9 @@ Competitions
 * 2026-04  USTC Financial Data Innovation and Application Competition 2024, Excellence Award
 * 2026-06  Kaggle Hull Tactical – Market Prediction, Silver Medal Zone (ranking 100/3677, solo)
 
-Internship
+Internship & Work experience
 ======
-Coming soon.
-
-Work experience
-======
-None
+* 2026-09 ~ Now: Bairong Inc, risk management algorithm intern
   
 Skills
 ======
